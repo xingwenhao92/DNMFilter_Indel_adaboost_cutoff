@@ -7,10 +7,17 @@ package edu.duke.humangenome.core;
 import edu.duke.humangenome.sam.MultiPileup;
 import edu.duke.humangenome.sam.IndelPileup;
 import edu.duke.humangenome.util.BaseUtils;
+
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.util.Map;
+import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import net.sf.picard.reference.ReferenceSequence;
 import net.sf.picard.util.SamLocusIterator;
-
+import net.sf.picard.reference.IndexedFastaSequenceFile;
 /**
  *
  * @author Yongzhuang Liu
@@ -22,17 +29,29 @@ public class FeatureSelection {
     private final static int OFFSPRING_INDEX = 2;
     private ReferenceSequence referenceSequence;
     private MultiPileup trioPileup;
-
-    public FeatureSelection(ReferenceSequence referenceSequence, MultiPileup trioPileup) {
+    private Properties properties;
+    private IndexedFastaSequenceFile indexfasta;
+    public FeatureSelection(ReferenceSequence referenceSequence, MultiPileup trioPileup, IndexedFastaSequenceFile indexfasta) {
         this.referenceSequence = referenceSequence;
         this.trioPileup = trioPileup;
+        this.indexfasta = indexfasta;
+        
     }
 
-    public String extract() {
-
+    public String extract() throws FileNotFoundException {
+    	//System.out.println(properties.getProperty("reference"));
+    	//indexfasta = new IndexedFastaSequenceFile(new File(properties.getProperty("reference")));
         String chrom = trioPileup.getReferenceName();
         //System.out.println("chrom"+chrom);
         int pos = trioPileup.getPosition();
+        int homostartpos = pos - 5;
+        int homoendpos = pos + 5;
+        int strstartpos = pos - 15;
+        int strendpos = pos + 15;
+        //int midpos = (strendpos - strstartpos)/2;
+        //String homo = new String(indexfasta.getSubsequenceAt(chrom, homostartpos, homoendpos).getBases()); 
+        String str = new String(indexfasta.getSubsequenceAt(chrom, strstartpos, strendpos).getBases());
+        String homo = str.substring(homostartpos-strstartpos, homoendpos-strstartpos+1);
         //System.out.println("pos"+pos);
 //        char ref = getRefBase();
 //        char alt = getMostAltAllele();
@@ -126,9 +145,14 @@ public class FeatureSelection {
             recordBuilder.append(refStrandDirection + "," + altStrandDirection + ",");
             recordBuilder.append(strandBias + ",");
         }
+        //System.out.println(homo + "\t" + str);
+        //System.out.println(gethomoflag(homo) + "\t" + getstrflag(str));
+        int homopolymerflag = gethomoflag(homo);
+        int shorttandemrepeatflag = getstrflag(str);
         int pValueOfFatherToOffspring = getPhredPValue(fAlleleCount, oAlleleCount);
         int pValueOfMotherToOffspring = getPhredPValue(mAlleleCount, oAlleleCount);
-        recordBuilder.append(pValueOfFatherToOffspring + "," + pValueOfMotherToOffspring);
+        recordBuilder.append(pValueOfFatherToOffspring + "," + pValueOfMotherToOffspring + "," + homopolymerflag + "," +shorttandemrepeatflag);///加入了homo和short tandem repeat
+        
         return recordBuilder.toString();
     }
     
@@ -141,4 +165,50 @@ public class FeatureSelection {
         }
         return (int) (Math.log10(p) * (-10));
     }
+    
+    public int gethomoflag(String ahomo) {
+    	Pattern pa;
+    	Matcher ma;
+    	pa = Pattern.compile("([atcg])\\1{4,}",Pattern.CASE_INSENSITIVE);
+    	ma = pa.matcher(ahomo);
+    	while (ma.find()) 
+    		return 1;
+    	return 0;
+    }
+    
+    public int getstrflag(String astr) {
+    	int[][] motifandtimes = {{2,3},{3,3},{4,3},{5,3}};
+    	Pattern pa;
+    	Matcher ma;
+    	for (int i = 0; i <motifandtimes.length; i++) {
+    		pa = Pattern.compile("([atcg]{" + motifandtimes[i][0] + "})\\1{" + (motifandtimes[i][1] - 1) + ",}",Pattern.CASE_INSENSITIVE);
+			ma = pa.matcher(astr);
+			while (ma.find()) {
+				String substr = ma.group();
+				int start = ma.start();
+				int end = ma.end();//start 是索引的值从零开始包含start  end 是偏移从1开始…… 包含end
+				if (start <= (astr.length()-1)/2+1 && end >= (astr.length()+1)/2-1) {
+					//System.out.println(start+ " " + end);
+					if (isHomo(ma.group().toLowerCase(), motifandtimes[i][0]) == false) {
+						//writer.println(titleline + "\t" + strline + "\t" +start + "\t" + end);
+						//writer.println(strline);
+						return 1;
+					}
+				}
+			}
+    	}
+    	return 0;
+    }
+    
+    boolean isHomo(String str, int motiflen) {
+		//System.out.println(str);
+		char achr = 0;
+		if (str.length() != 0) 
+			achr = str.charAt(0);
+		for (int i = 1; i < motiflen && i < str.length(); i++) {
+			if (str.charAt(i) != achr)
+				return false;
+		}
+		return true;
+	}
 }

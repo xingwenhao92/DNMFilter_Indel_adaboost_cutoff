@@ -73,7 +73,7 @@ public class MultiSamLocusIterator {
                 pq.add(list.get(i));
             }
         }
-        if (map.size() > 0) {
+        if (map.size() > 0) {//保证都不为空应该是??????
             return map;
         } else {
             return null;

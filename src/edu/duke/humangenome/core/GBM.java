@@ -14,6 +14,7 @@ import edu.duke.humangenome.sam.MultiPileup;
 import edu.duke.humangenome.sam.MultiSamLocusIterator;
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -23,11 +24,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+
+import net.sf.picard.reference.IndexedFastaSequenceFile;
 import net.sf.picard.reference.ReferenceSequence;
 import net.sf.picard.reference.ReferenceSequenceFileWalker;
 import net.sf.picard.util.Interval;
 import net.sf.picard.util.IntervalList;
 import net.sf.picard.util.SamLocusIterator;
+import net.sf.picard.util.SamLocusIterator.LocusInfo;
 import net.sf.samtools.SAMFileReader;
 import org.apache.log4j.Logger;
 import rcaller.RCaller;
@@ -44,9 +48,10 @@ public class GBM {
     private final static int MOTHER_INDEX = 1;
     private final static int OFFSPRING_INDEX = 2;
     private Properties properties;
-
-    public GBM(Properties properties) {
+    private IndexedFastaSequenceFile indexfasta;
+    public GBM(Properties properties) throws IOException {
         this.properties = properties;
+        indexfasta = new IndexedFastaSequenceFile(new File(properties.getProperty("reference")));
     }
 
     public boolean run() throws IOException {
@@ -107,8 +112,10 @@ public class GBM {
         testing.write("Offspring_Strand_Direction_For_Ref" + "," + "Offspring_Strand_Direction_For_Alt" + ",");
         testing.write("Offspring_Strand_Bias" + ",");
 
-        testing.write("PValue_Father_To_Offspring" + "," + "PValue_Mother_To_Offspring" + "\n");
-
+        testing.write("PValue_Father_To_Offspring" + "," + "PValue_Mother_To_Offspring" + ",");
+        
+        testing.write("homopolymerflag" + "," + "shorttandemrepeatflag" + "\n");
+        
         File referenceSequenceFile = new File(properties.getProperty("reference"));
         List<Trio> trios = (new PEDReader(properties.getProperty("pedigree"))).getTrios();
         Properties bams = (new ConfigReader(properties.getProperty("bam"))).parse();
@@ -148,14 +155,14 @@ public class GBM {
                 trioIntervalList[i] = new IntervalList(trioSAMFileReader[i].getFileHeader());
             }
             
-            List <DNMRecord> dnmList=new ArrayList();            
-            
+            //List <DNMRecord> dnmList=new ArrayList();       //我们应该不再使用list，而是采用更加有序的，以期待index和temp一致     ，否则很难找到他们的对应关系
+            Map<String, DNMRecord> dnmMap = new HashMap();
             while (dnmRecord != null && dnmRecord.getFamilyID().equals(familyID)) {
                 Interval interval = new Interval(dnmRecord.getChrom(), dnmRecord.getPos(), dnmRecord.getPos());
                 for (int i = 0; i < 3; i++) {
                     trioIntervalList[i].add(interval);
                 }
-                dnmList.add(dnmRecord);
+                dnmMap.put(dnmRecord.getChrom() + "@" +dnmRecord.getPos(),dnmRecord);
                 dnmRecord = dnmReader.getNextRecord();
             }
             for (int i = 0; i < 3; i++) {
@@ -169,19 +176,28 @@ public class GBM {
             Map<Integer, SamLocusIterator.LocusInfo> tmp = null;
             ReferenceSequenceFileWalker referenceSequenceFileWalker = new ReferenceSequenceFileWalker(referenceSequenceFile);
             
-            int index=0;            
+            //int index=0;            
             while ((tmp = trioSamLocusIterator.getLocusInfos()) != null) {
             	//System.out.println("tem"+tmp.size());
             	//System.out.println("index:"+index);
             	//System.out.println(dnmList.get(index).getRef() + dnmList.get(index).getVar());
-                MultiPileup trioPileup = new MultiPileup(tmp,dnmList.get(index).getRef(),dnmList.get(index).getVar());
+            	LocusInfo tmplocusInfo = null;
+            	for (Integer tmpindex : tmp.keySet()) {
+            		tmplocusInfo = tmp.get(tmpindex);
+                    break;
+                }
+            	String fordnmmap = tmplocusInfo.getSequenceName() + "@" + tmplocusInfo.getPosition();
+                MultiPileup trioPileup = new MultiPileup(tmp,dnmMap.get(fordnmmap).getRef(),dnmMap.get(fordnmmap).getVar());
                 if (referenceSequence == null || referenceSequence.getContigIndex() != trioPileup.getReferenceIndex()) {
                     referenceSequence = referenceSequenceFileWalker.get(trioPileup.getReferenceIndex());
                 }
-                FeatureSelection featureSelection = new FeatureSelection(referenceSequence, trioPileup);
+                FeatureSelection featureSelection = new FeatureSelection(referenceSequence, trioPileup, indexfasta);
                 testing.write(familyID + "," + trioPileup.getReferenceName() + "," + trioPileup.getPosition() + "," + featureSelection.extract() + "\n");
                 numOfAllSites++;
-                index ++;//此处缺少自加  修改
+                //if (dnmMap.get(fordnmmap).getPos() == trioPileup.getPosition())
+                	//System.out.println(dnmMap.get(fordnmmap).getPos() + "\t" + trioPileup.getPosition());
+                //index ++;//此处缺少自加  修改
+                //System.out.println(index);
             }
             for (int i = 0; i < 3; i++) {
                 trioSAMFileReader[i].close();

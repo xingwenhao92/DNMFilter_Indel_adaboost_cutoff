@@ -19,11 +19,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+
+import net.sf.picard.reference.IndexedFastaSequenceFile;
 import net.sf.picard.reference.ReferenceSequence;
 import net.sf.picard.reference.ReferenceSequenceFileWalker;
 import net.sf.picard.util.Interval;
 import net.sf.picard.util.IntervalList;
 import net.sf.picard.util.SamLocusIterator;
+import net.sf.picard.util.SamLocusIterator.LocusInfo;
 import net.sf.samtools.SAMFileReader;
 import org.apache.log4j.Logger;
 
@@ -39,6 +42,7 @@ public class Extract {
     private final static int OFFSPRING_INDEX = 2;
     private Properties properties;
     File referenceSequenceFile;
+    private IndexedFastaSequenceFile indexfasta;
     List<Trio> trios;
     Properties bams;
     String outputPath;
@@ -46,12 +50,14 @@ public class Extract {
     String negativePath;
 
     public Extract(Properties properties) throws IOException {
+    	this.properties = properties;
         this.referenceSequenceFile = new File(properties.getProperty("reference"));
         this.trios = (new PEDReader(properties.getProperty("pedigree"))).getTrios();
         this.bams = (new ConfigReader(properties.getProperty("bam"))).parse();
         this.positivePath = properties.getProperty("positive");
         this.negativePath = properties.getProperty("negative");
         this.outputPath = properties.getProperty("output");
+        indexfasta = new IndexedFastaSequenceFile(new File(properties.getProperty("reference")));
     }
 
     public void run() throws IOException {
@@ -90,8 +96,9 @@ public class Extract {
         output.write("Offspring_Strand_Direction_For_Ref" + "," + "Offspring_Strand_Direction_For_Alt" + ",");
         output.write("Offspring_Strand_Bias" + ",");
 
-        output.write("PValue_Father_To_Offspring" + "," + "PValue_Mother_To_Offspring" + "," + "Class" + "\n");
-
+        output.write("PValue_Father_To_Offspring" + "," + "PValue_Mother_To_Offspring" + ",");
+        output.write("homopolymerflag" + "," + "shorttandemrepeatflag" + "," + "Class" +"\n");
+        
         logger.info("Extracting features ......");
 
         int numOfPositive=buildTrainingSet(positivePath, "positive", output);
@@ -129,14 +136,15 @@ public class Extract {
             }
             
             //////////////////////////////////////////////////////////////////////////////
-            List <DNMRecord> dnmList= new ArrayList();
-            
+            //List <DNMRecord> dnmList= new ArrayList();
+            Map<String, DNMRecord> dnmMap = new HashMap();
             while (dnmRecord != null && dnmRecord.getFamilyID().equals(familyID)) {
                 Interval interval = new Interval(dnmRecord.getChrom(), dnmRecord.getPos(), dnmRecord.getPos());
                 for (int i = 0; i < 3; i++) {
                     trioIntervalList[i].add(interval);
                 }
-                dnmList.add(dnmRecord);
+                //dnmList.add(dnmRecord);
+                dnmMap.put(dnmRecord.getChrom() + "@" +dnmRecord.getPos(),dnmRecord);
                 dnmRecord = dnmReader.getNextRecord();
             }
             //////////////////////////////////////////////////////////////////////////////
@@ -151,18 +159,24 @@ public class Extract {
             Map<Integer, SamLocusIterator.LocusInfo> tmp = null;
             ReferenceSequenceFileWalker referenceSequenceFileWalker = new ReferenceSequenceFileWalker(referenceSequenceFile);
             
-            int index=0;
+            //int index=0;
             while ((tmp = trioSamLocusIterator.getLocusInfos()) != null) {
             	//System.out.println("tem"+tmp.size());
             	//System.out.println("index:"+index);
-                MultiPileup trioPileup = new MultiPileup(tmp,dnmList.get(index).getRef(),dnmList.get(index).getVar());
+            	LocusInfo tmplocusInfo = null;
+            	for (Integer tmpindex : tmp.keySet()) {
+            		tmplocusInfo = tmp.get(tmpindex);
+                    break;
+                }
+            	String fordnmmap = tmplocusInfo.getSequenceName() + "@" + tmplocusInfo.getPosition();
+                MultiPileup trioPileup = new MultiPileup(tmp,dnmMap.get(fordnmmap).getRef(),dnmMap.get(fordnmmap).getVar());
                 if (referenceSequence == null || referenceSequence.getContigIndex() != trioPileup.getReferenceIndex()) {
                     referenceSequence = referenceSequenceFileWalker.get(trioPileup.getReferenceIndex());
                 }
-                FeatureSelection featureSelection = new FeatureSelection(referenceSequence, trioPileup);
+                FeatureSelection featureSelection = new FeatureSelection(referenceSequence, trioPileup, indexfasta);
                 output.write(featureSelection.extract() + "," + label + "\n");
                 count++;
-                index ++;
+                //index ++;
             }
             for (int i = 0; i < 3; i++) {
                 trioSAMFileReader[i].close();

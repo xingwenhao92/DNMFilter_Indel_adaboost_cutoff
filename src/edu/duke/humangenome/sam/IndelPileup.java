@@ -79,7 +79,8 @@ public class IndelPileup {
         this.locusInfo = locusInfo;
         this.refAllele = refAllele;
         this.altAllele = altAllele;
-        //System.out.println(refAllele + "\t" + altAllele);///////////////
+        //if (locusInfo != null)
+        	//System.out.println(locusInfo.getSequenceName() + "\t" + locusInfo.getSequenceIndex() + "\t" + refAllele + "\t" + altAllele);///////////////
         this.referenceSequence = referenceSequence;
         initialize();
     }
@@ -88,6 +89,24 @@ public class IndelPileup {
         if (locusInfo == null) {
             return;
         }
+        /*altAlleleCount = 0;
+        refAlleleCount = 0;
+        forwardRef = 0;
+        forwardAlt = 0;
+        reverseAlt = 0;
+        reverseRef = 0;
+        meanRefMappingQuality = 0;
+        meanAltMappingQuality = 0;
+        meanRefDistanceToThreePrime = 0;
+        meanAltDistanceToThreePrime = 0;
+        altFractionOfMQ0Reads = 0;
+        refFractionOfMQ0Reads = 0;
+        refFractionOfSoftClippedReads = 0;
+        altFractionOfSoftClippedReads = 0;
+        meanRefNearbyIndels = 0;
+        meanAltNearbyIndels = 0;
+        meanRefNearbyMismatches = 0;
+        meanAltNearbyMismatches = 0;*/
         depth = locusInfo.getRecordAndPositions().size();
         List<RecordAndOffset> list = locusInfo.getRecordAndPositions();
         
@@ -167,7 +186,7 @@ public class IndelPileup {
         meanRefNearbyMismatches = divide((int) meanRefNearbyMismatches, refAlleleCount);
         refFractionOfSoftClippedReads = divide((int) refFractionOfSoftClippedReads, refAlleleCount);
         refFractionOfMQ0Reads = divide((int) refFractionOfMQ0Reads, refAlleleCount);
-        //System.out.println("reverseAlt"+reverseAlt+"forwardAlt"+forwardAlt);
+        //System.out.println(refFractionOfSoftClippedReads + "\t" + refAlleleCount);
         //System.out.println("reverseRef"+reverseRef+"forwardRef"+forwardRef);
     }
     
@@ -272,6 +291,7 @@ public class IndelPileup {
 
     private int getNearbyMismatches(SAMRecord samRecord) {
         byte[] referenceBases = referenceSequence.getBases();
+        //System.out.println(new String(referenceBases));
         return SequenceUtil.countMismatches(samRecord, referenceBases);
     }
     
@@ -433,7 +453,7 @@ public class IndelPileup {
         if (b == 0) {
             return 0.0;
         } else {
-            return (double) a / b;
+            return (double)a / (double)b;
         }
     }
 
