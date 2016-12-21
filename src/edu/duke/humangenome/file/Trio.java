@@ -37,4 +37,16 @@ public class Trio {
     public Individual getOffspring() {
         return offspring;
     }
+
+    public void setMother(Individual mother) {
+    	this.mother = mother;
+    }
+    
+    public void setOffspring(Individual offspring) {
+    	this.offspring = offspring;
+    }
+    
+    public void setFather(Individual father) {
+    	this.father = father;
+    }
 }
