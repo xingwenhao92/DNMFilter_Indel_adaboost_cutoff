@@ -57,7 +57,7 @@ public class Extract {
         this.positivePath = properties.getProperty("positive");
         this.negativePath = properties.getProperty("negative");
         this.outputPath = properties.getProperty("output");
-        indexfasta = new IndexedFastaSequenceFile(new File(properties.getProperty("reference")));
+        this.indexfasta = new IndexedFastaSequenceFile(new File(properties.getProperty("reference")));
     }
 
     public void run() throws IOException {

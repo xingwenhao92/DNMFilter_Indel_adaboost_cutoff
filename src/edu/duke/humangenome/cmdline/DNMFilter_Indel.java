@@ -4,6 +4,7 @@
  */
 package edu.duke.humangenome.cmdline;
 
+import edu.duke.humangenome.core.ExportVisualData;
 import edu.duke.humangenome.core.Extract;
 import edu.duke.humangenome.core.GBM;
 import edu.duke.humangenome.core.Simulation;
@@ -36,10 +37,11 @@ public class DNMFilter_Indel {
         usage = usage + "COMMANDS:\n"
                 + "\textract\t\tExtract sequence features to build the training set\n"
                 + "\tgbm\t\tUse gradient boosting approach to filter de novo indels\n"
-                + "\tsimulate\tSimulate TP data by exchanging father/mothe with offspring";
+                + "\tsimulate\tSimulate TP data by exchanging father/mothe with offspring\n"
+                + "\tvisual\t\tgenerate visualiztion data for visual.html to use\n";
         String cmd = null;
         if (args.length > 0) {
-            if (args[0].equals("extract") || args[0].equals("gbm") || args[0].equals("simulate")) {
+            if (args[0].equals("extract") || args[0].equals("gbm") || args[0].equals("simulate") || args[0].equals("visual")) {
                 cmd = args[0];
             } else {
                 logger.error("Command is not recognized!\n" + usage);
@@ -87,9 +89,18 @@ public class DNMFilter_Indel {
                    return;
                }
             } else {
-                printHelp(options,"gbm");
+                printHelp(options, "gbm");
                 return;
             }
+        }
+        
+        if (cmd.equals("visual")) {
+        	if (isValidated(commandLine, "visual")) {
+        		new ExportVisualData(getProperties(commandLine, "visual")).run();
+        	} else {
+        		printHelp(options, "visual");
+        		return;
+        	}
         }
         long end = System.currentTimeMillis();
         logger.info("Total running time is " + (end - start) / 1000 + " seconds");
@@ -124,6 +135,13 @@ public class DNMFilter_Indel {
             options.addOption(OptionBuilder.withLongOpt("simupositive").withDescription("DNM file (required)").hasArg().withArgName("FILE").create());
             options.addOption(OptionBuilder.withLongOpt("exchange").withDescription("exchange Mother/Father with Offspring to simulate data, use MWC or FWC").hasArg().withArgName("String").create());
             return options;
+        } else if(cmd.equals("visual")) {
+        	options.addOption(OptionBuilder.withLongOpt("reference").withDescription("reference genome file (required)").hasArg().withArgName("FILE").create());
+            options.addOption(OptionBuilder.withLongOpt("pedigree").withDescription("pedigree file (required)").hasArg().withArgName("FILE").create());
+            options.addOption(OptionBuilder.withLongOpt("bam").withDescription("bam list file (required)").hasArg().withArgName("FILE").create());
+            options.addOption(OptionBuilder.withLongOpt("outputpath").withDescription("output path (required)").hasArg().withArgName("FILEPATH").create());
+            options.addOption(OptionBuilder.withLongOpt("position").withDescription("positions need to visualize(required)").hasArg().withArgName("FILE").create());
+            return options;
         } else {
         	return null;
         }
@@ -148,7 +166,7 @@ public class DNMFilter_Indel {
             properties.put("training", line.getOptionValue("training"));
             properties.put("configuration", line.getOptionValue("configuration"));
             if (!line.hasOption("cutoff")) {
-                properties.put("cutoff", "0.75"); //cutoff设置为0.75  
+                properties.put("cutoff", "0.5"); //cutoff设置为0.5  
             }
             else{
                 properties.put("cutoff", line.getOptionValue("cutoff"));
@@ -161,6 +179,14 @@ public class DNMFilter_Indel {
             properties.put("output", line.getOptionValue("output"));
             properties.put("simupositive", line.getOptionValue("simupositive"));
             properties.put("exchange", line.getOptionValue("exchange"));
+        }
+        
+        if (cmd.equals("visual")) {
+        	properties.put("reference", line.getOptionValue("reference"));
+            properties.put("pedigree", line.getOptionValue("pedigree"));
+            properties.put("bam", line.getOptionValue("bam"));
+            properties.put("outputpath", line.getOptionValue("outputpath"));
+            properties.put("position", line.getOptionValue("position"));///position need to visualize
         }
         return properties;
     }
@@ -194,8 +220,19 @@ public class DNMFilter_Indel {
                 logger.error("DNM file is not correctly specified!");
                 tag = false;
             }
-           
         }
+        
+        if (cmd.equals("visual")) {
+            if (!line.hasOption("position") || !(new File(line.getOptionValue("position")).isFile())) {
+                logger.error("position file is not correctly specified!");
+                tag = false;
+            }
+            if (!line.hasOption("outputpath") || !(new File(line.getOptionValue("outputpath")).isDirectory())) {
+                logger.error("position is not correctly specified!");
+                tag = false;
+            }
+        }
+        
         if (cmd.equals("gbm")) {
             if (!line.hasOption("training") || !(new File(line.getOptionValue("training")).isFile())) {
                 logger.error("The training set is not correctly specified!");
@@ -210,10 +247,11 @@ public class DNMFilter_Indel {
                 tag = false;
             }
         }
-        if (!line.hasOption("output")) {
-            logger.error("The output file is not correctly specified!");
-            tag = false;
-        }
+        if (!cmd.equals("visual"))
+        	if (!line.hasOption("output")) {
+        		logger.error("The output file is not correctly specified!");
+        		tag = false;
+        	}
         return tag;
     }
 
