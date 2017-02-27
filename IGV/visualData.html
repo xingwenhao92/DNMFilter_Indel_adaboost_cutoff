@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en"> 
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title></title>
+
+<script src="http://cdn.jsdelivr.net/interact.js/1.2.6/interact.min.js"></script>
+<script type="text/javascript" src="http://cdn.bootcss.com/d3/4.5.0/d3.min.js"></script>
+<style> 
+body {
+	padding: 0;
+	margin: 0;
+}
+
+.figure-container {
+	position: relative;
+	padding-top: 1px;
+}
+
+.data-axis {
+	margin-bottom: 10px;
+	position: fixed;
+	top: 0px;
+}
+
+.data-track {
+	margin-top: 60px;
+	height : 200px;
+	overflow-y : auto;
+	padding-bottom: 10px;
+	margin-bottom: 20px;
+}
+
+</style>
+</head>
+
+<body>
+<div id='funcbutton'>
+<input type="file",id="csvfile", onchange = "loadcsv()", name="selectcsvfile"> select csvfile </input>
+<input type="file",id="reffile", onchange = "loadref()", name="selectreffile"> select reffile </input>
+<button onclick="progress()">visual</button>
+</div>
+
+<section class="figure-container">
+</section>
+
+
+<script type="text/javascript">
+/*
+	var csvdata = [];
+	d3.csv("CEU_1_5285300.csv", function(d) {
+		return {
+			allID : +d.allID,
+			groupID : +d.groupID,
+			groupName : d.groupName,
+			Direction : d.Direction,
+			startPosition : +d.startPosition,
+			mappingquality : +d.mappingquality,
+			cigar : d.cigar,
+			editcigar : d.editcigar,
+			baseread : d.baseread
+		};
+	}, function(data) {
+		console.log(data);
+		csvdata = data;
+			if (--remaining)dowork();
+	});
+*/
+	var csvfile = new FileReader();
+	var reffile = new FileReader();
+	var drawboardx = 140;
+	var drawboardy = 20;
+	var nowx = drawboardx;
+	var nowy = drawboardy;
+	var dstep = 10;//base width
+	var dwidth = 10;//chrome track width
+	var dinterval = 4
+	var refboarder = 20;
+	var boarderdiv = 60;
+	function loadcsv() {
+		var file = document.querySelector("input[name=selectcsvfile]").files[0];
+		if (file) csvfile.readAsText(file);
+	}
+	
+	function loadref() {
+		var file = document.querySelector("input[name=selectreffile]").files[0];
+		if (file) reffile.readAsText(file);
+	}
+
+	function scrollAxis (event) {
+		var axis = document.querySelector('.data-axis');
+		if (axis) {
+			axis.style.left = -(window.pageXOffset || document.scrollLeft || 0) + 'px';
+		}
+	}
+		
+	function removefuncionbutton() {
+		var child = document.getElementById("funcbutton");
+		child.parentNode.removeChild(child);
+	}
+	
+	function progress(){
+		removefuncionbutton();
+		var refdata = [];
+		var csvdata = [];
+		//document.write(csvfile.result);
+		csvdata = d3.csvParse(csvfile.result, function(d) {
+			return {
+				allID : +d.allID,
+				groupID : +d.groupID,
+				groupName : d.groupName,
+				Direction : d.Direction,
+				//startPosition : +d.startPosition,
+				//endPosition : +d.endPosition,
+				startPosition : +d.startPositionContainClip,
+				endPosition : +d.endPositionContainClip,
+				mappingquality : +d.mappingquality,
+				cigar : d.cigar,
+				editcigar : d.editcigar,
+				baseread : d.baseread,
+				mismatch : d.mismatch
+			};
+		});
+		
+		refdata = d3.csvParse(reffile.result, function(d) {
+			return {
+				chrom : d.chrom,
+				visualPositon : +d.visualPositon,
+				startPosition : +d.startPosition,
+				endPosition : +d.endPosition,
+				refread : d.refread
+			}
+		});
+		//console.log(refdata);
+		//console.log(csvdata);
+		display();
+
+		function display () {
+			window.removeEventListener('scroll', scrollAxis);
+			//document.write(refdata.endPosition);
+			var alldata = dowork();
+			var allpathdata = alldata.allaction;
+			var allgroupnum = alldata.threeidi;
+			var refaction = alldata.refaction;
+			var allname = alldata.threename;
+			
+			var xline = d3.select('.figure-container').append('section').attr('class', 'data-axis').attr('id', 'axis-dragable').attr('draggable', 'true').append('svg').attr('width', (refdata[0].endPosition+1-refdata[0].startPosition)*dstep+drawboardx).attr('height', boarderdiv);
+			var AColor = xline.append('text').attr('x',0).attr('y',15).style('fill', 'aqua').style('font-size', 15).text('A');
+			var TColor = xline.append('text').attr('x',15).attr('y',15).style('fill', 'tomato').style('font-size', 15).text('T');
+			var CColor = xline.append('text').attr('x',30).attr('y',15).style('fill', 'gold').style('font-size', 15).text('C');
+			var GColor = xline.append('text').attr('x',45).attr('y',15).style('fill', 'green').style('font-size', 15).text('G');
+			var sitchrome = xline.append('text').attr('x',0).attr('y',30).style('fill', 'black').style('font-size', 15).text('chrome:' + refdata[0].chrom);
+			var siteposition = xline.append('text').attr('x',0).attr('y',45).style('fill', 'black').style('font-size', 15).text('pos:' + refdata[0].visualPositon);
+			var xline1 = d3.scaleLinear().domain([refdata[0].startPosition, refdata[0].endPosition]).range([0, (refdata[0].endPosition+1-refdata[0].startPosition)*dstep]);
+			var xline2 = d3.axisTop().scale(xline1).ticks(20).tickFormat(d3.format(",.0f"))/*.tickValues(refdata[0].startPosition,refdata[0].visualPositon,refdata[0].endPosition)*/;
+			//var xline3 = d3.axisBottom().scale(xline2).tickFormat(d3.format(",.0f")).tickValues(refdata[0].viewposition);
+			xline.append('g').attr('class', 'axis').attr('transform', 'translate(' + drawboardx + ',' + drawboardy + ')').call(xline2).attr("transform", "translate(" + drawboardx + "," + 20 + ")");
+			var reftrack = xline.append('g').selectAll('.reftrack').data(refaction).enter().append('path').attr('d', function(data){return data.d}).attr('fill', function(data){return data.fill}).attr('stroke', function(data){return data.stroke}).attr('stroke_width', function(d){return d.stroke_width}).attr('fill-opacity', function(d){return d.fillopacity});
+			
+			//var alltrack1 = d3.select('body').append('svg').attr('width', (refdata[0].endPosition+1-refdata[0].startPosition)*dstep+drawboardx).attr('height', (csvdata.length+1)*(dwidth+dinterval)+drawboardy);
+			//var alltrack2 = alltrack1.append('g').selectAll('.trackline').data(pathdata).enter().append('path').attr('d', function(data){return data.d}).attr('fill', function(d){return d.fill}).attr('stroke', function(d){return d.stroke}).attr('stroke_width', function(d){return d.stroke_width}).attr('fill-opacity', function(d){return d.fillopacity});
+			//var viewposition = alltrack1.append('g').append('path').attr('d', 'M' + ((refdata[0].visualPositon-refdata[0].startPosition)*dstep+drawboardx) + ',' + (drawboardy+dinterval+dwidth) + 'h' + dstep + 'v' + (drawboardy+(dwidth+dinterval)*(csvdata.length+1)) + 'h' + (0-dstep) + 'z').attr('fill', 'none').attr('stroke','blue').attr('stroke_width',5);
+			for (var i = 0; i < allpathdata.length; i++) {
+				var pathdata = allpathdata[i].action;
+				//console.log(allgroupnum);
+				var alltrack1 = d3.select('.figure-container').append('section').attr('class', 'data-track').style('width', (refdata[0].endPosition+1-refdata[0].startPosition)*dstep+drawboardx + 20 + 'px').append('svg').attr('width', (refdata[0].endPosition+1-refdata[0].startPosition)*dstep+drawboardx).attr('height', (allgroupnum[i]+1)*(dwidth+dinterval)+drawboardy);
+				var informationstr = "individual:" + allname[i];
+				var datainformation = alltrack1.append('text').attr('x', 0).attr('y', 30).style('font-size', 20).text(informationstr);
+				var alltrack2 = alltrack1.append('g').selectAll('.trackline').data(pathdata).enter().append('path').attr('d', function(data){return data.d}).attr('fill', function(d){return d.fill}).attr('stroke', function(d){return d.stroke}).attr('stroke_width', function(d){return d.stroke_width}).attr('fill-opacity', function(d){return d.fillopacity});
+				var viewposition = alltrack1.append('g').append('path').attr('d', 'M' + ((refdata[0].visualPositon-refdata[0].startPosition)*dstep+drawboardx) + ',' + (drawboardy+dinterval+dwidth) + 'h' + dstep + 'v' + (drawboardy+(dwidth+dinterval)*(csvdata.length+1)) + 'h' + (0-dstep) + 'z').attr('fill', 'none').attr('stroke','blue').attr('stroke_width',5);
+		
+			}
+			window.addEventListener('scroll', scrollAxis);
+			
+			interact('.data-axis')
+			  .draggable({
+				inertia: true,
+				restrict: {
+				  restriction: "parent",
+				  endOnly: true,
+				  elementRect: { top: 0, left: 0, bottom: 1, right: 1 }
+				},
+				autoScroll: true,
+				onmove: dragMoveListener,
+				onend: function (event) {
+					
+				}
+			  });
+
+			function dragMoveListener (event) {
+				var target = event.target;
+				y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+				target.style.transform = 'translate(' + 0 + 'px, ' + y + 'px)';
+				target.setAttribute('data-y', y);
+			}
+			window.dragMoveListener = dragMoveListener;
+		}
+		
+		
+		
+		function dowork() {
+			/*document.write(csvdata.length);
+			for(var i = 0; i < csvdata.length; i++) 
+				document.write(csvdata[i].groupID + "\r\n");
+			for(var i = 0; i < refdata.length; i++) 
+				document.write(refdata[i].startPosition);*/
+			var visualpositon = refdata[0].visualPositon;
+			var startPosition = refdata[0].startPosition;
+			var endPosition = refdata[0].endPosition;
+			var refread = refdata[0].refread;
+			var chrom = refdata[0].chrom;
+			var action = [];
+			var allaction = [];
+			var mismatchAction = [];
+			var countgroup = 0;
+			var threeidi = [];// count number of three individual
+			var threename = [];//id of three individual
+			var refaction = [];
+			for(var i = 0; i < csvdata.length; i++) {
+				if (i == 0) threename.push(csvdata[0].groupName);
+				if (csvdata[i].groupID == 1) {
+					if (i != 0) {
+						threeidi.push(countgroup);
+						allaction.push({
+							action : action
+						});
+						action = [];//empty action 
+						threename.push(csvdata[i].groupName);
+						nowx = drawboardx;
+						nowy = drawboardy;
+					}
+					countgroup = 1;
+				} else {
+					countgroup++;
+				}
+				
+				
+				var editcigar = csvdata[i].editcigar.split(";");//such as R:1;S:30;M:71 to R:1 S:30 M:71 
+				nowy = nowy + dinterval + dwidth;//caculate y position 
+				nowx = drawboardx + dstep * (csvdata[i].startPosition - startPosition);//caculate x position
+				var mappingquality = csvdata[i].mappingquality;
+				for(var j = 0; j < editcigar.length; j++) {// 
+					var opera = editcigar[j].split(":");//such as R:1 to R  1
+					var opernumber = +opera[1];
+					var d;
+					var fill;
+					var stroke;
+					var fillopacity;
+					var strokeWidth;
+					if (opera[0] == 'N') {//skip
+						nowx = nowx + dstep * opernumber;
+						fill = "gray"
+						fillopacity = 1;
+						stroke = "black";
+						strokeWidth = "3";
+					} else if (opera[0] == 'H') {//hard clip
+						/*d = "M" + nowx + "," + nowy + "h" + dstep * opernumber + "v" + dwidth + "h" + (0-opernumber*dstep) + "z";
+						nowx = nowx + dstep*opernumber;
+						fill = "navajowhite";
+						stroke = "black";
+						strokeWidth = "3";*/
+						continue;
+					} else if (opera[0] == 'M') {//match or not match
+						d = "M" + nowx + "," + nowy + "h" + dstep*opernumber + "v" + dwidth + "h" + (0-opernumber*dstep) + "z";
+						nowx = nowx + dstep*opernumber;
+						if (mappingquality != 0)
+							fill = "gray";
+						else 
+							fill = "white";
+						fillopacity = 1;
+						stroke = "black"; 
+						strokeWidth = "3";
+						//continue;
+					} else if (opera[0] == 'I') {//insert  !!!
+						d = "M" + nowx + "," + nowy + "h" + (0-dstep/2) + "v" + dwidth + "h" + dstep/2 + "z";
+						//nowx = nowx + dstep*opernumber/2;
+						fill = "red";
+						stroke =  "black";
+						strokeWidth = "3";
+						fillopacity = 1;
+					} else if (opera[0] == 'D') {//delet
+						d = "M" + nowx + "," + (nowy + dwidth/2) + "h" + dstep*opernumber + "z";
+						nowx = nowx + dstep*opernumber;
+						fill = "red";
+						stroke = "black";
+						strokeWidth = "3";
+						fillopacity = 1;
+					} else if (opera[0] == 'S') {//soft clip
+						d = "M" + nowx + "," + nowy + "h" + dstep*opernumber + "v" + dwidth + "h" + (0-opernumber*dstep) + "z";
+						nowx = nowx + dstep*opernumber;
+						fill = "navajowhite";
+						stroke =  "black";
+						strokeWidth = "3";
+						fillopacity = 1;
+						//continue;
+					} else if (opera[0] == 'P') {//paddding
+						d = "M" + nowx + "," + nowy + "h" + dstep*opernumber + "v" + dwidth + "h" + (0-opernumber*dstep) + "z";
+						nowx = nowx + dstep*opernumber;
+						fill = "gray";
+						stroke =  "black";
+						fillopacity = 1;
+						strokeWidth = "3";
+					} else if (opera[0] == 'X') {//mismatch
+						d = "M" + nowx + "," + nowy + "h" + dstep*opernumber + "v" + dwidth + "h" + (0-opernumber*dstep) + "z";
+						nowx = nowx + dstep*opernumber;
+						fill = "gray";
+						stroke =  "black";
+						fillopacity = 1;
+						strokeWidth = "3";
+					} else if (opera[0] == '=') {//match
+						d = "M" + nowx + "," + nowy + "h" + dstep*opernumber + "v" + dwidth + "h" + (0-opernumber*dstep) + "z";
+						nowx = nowx + dstep*opernumber;
+						if (mappingquality != 0) {
+							fill = "gray";
+						} else {
+							fill = "white";
+						}
+						fillopacity = 1;
+						stroke =  "black";
+						strokeWidth = "3";
+					} else if (opera[0] == 'R') {//Reverse chain
+						d = "M" + nowx + "," + nowy + "l" + (0-dstep)/2 + "," + dwidth/2 + "l" + dstep/2 + "," + dwidth/2 + "z";
+						//nowx = nowx + dstep*opernumber;
+						fill = "blue";
+						stroke =  "black";
+						fillopacity = 1;
+						strokeWidth = "3";
+					} else if (opera[0] == 'F') {//forward chain
+						d = "M" + nowx + "," + nowy + "l" + dstep/2 + "," + dwidth/2 + "l" + (0-dstep)/2 + "," + dwidth/2 + "z";
+						//nowx = nowx + dstep*opernumber;
+						fill = "blue";
+						stroke =  "black";
+						fillopacity = 1;
+						strokeWidth = "3";
+					} else {
+						
+					}
+					
+					action.push({
+						d : d,
+						fill : fill,
+						fillopacity : fillopacity,
+						stroke : stroke,
+						stroke_width : strokeWidth
+					});
+					
+					
+				}
+				
+				if (csvdata[i].mismatch != "none") {
+					var mismatchdata = csvdata[i].mismatch.split(";");
+					for (var j = 0; j < mismatchdata.length; j++) {
+						var mis = mismatchdata[j].split(":");
+						var misbase = mis[0];
+						var misposi = +mis[1];
+						var fill;
+						d = "M" + (drawboardx + dstep*(misposi - startPosition)) + "," + nowy + "h" + dstep + "v" + dwidth + "h" + (0-dstep) + "z";
+						if (misbase == "A" || misbase == "a") {
+							fill = "aqua";
+						} else if (misbase == "T" || misbase == "t") {
+							fill = "tomato";
+						} else if (misbase == "C" || misbase == "c") {
+							fill = "gold";
+						} else if (misbase == "G" || misbase == "g") {
+							fill = "green";
+						} else {
+						
+						}
+						
+						stroke = "black";
+						fillopacity = 0.7;
+						strokeWidth = "3";
+						
+						action.push({
+							d : d,
+							fill : fill,
+							fillopacity : fillopacity,
+							stroke : stroke,
+							stroke_width : strokeWidth
+						});
+					}
+				}
+				
+			}
+			threeidi.push(countgroup);
+			allaction.push({action : action});
+			//console.log(threeidi.length);
+			
+			nowx = drawboardx;
+			nowy = drawboardy + refboarder;
+			for (var k = 0; k < refread.length; k ++) {
+				d = "M" + nowx + "," + nowy + "h" + dstep + "v" + dwidth + 'h' + (0-dstep) + "z";
+				nowx = nowx + dstep;
+				stroke = "black";
+				strokeWidth = "0";
+				fillopacity = 1;
+				switch(refread[k]) {
+					case 'A' :
+					case 'a' :
+						fill = "aqua";
+						break;
+					case 'T' :
+					case 't' :
+						fill = "tomato";
+						break;
+					case 'C' :
+					case 'c' :
+						fill = "gold";
+						break;
+					case 'G' :
+					case 'g' :
+						fill = "green";
+						break;
+					default : 
+				}
+				
+				refaction.push({
+					d : d,
+					fill : fill,
+					fillopacity : fillopacity,
+					stroke : stroke,
+					stroke_width : strokeWidth
+				});
+			}
+			
+			
+			return {allaction : allaction, threeidi : threeidi, refaction : refaction, threename : threename};
+		}
+	}
+	
+</script>
+
+</body>
+</html>

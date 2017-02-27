@@ -91,17 +91,17 @@ public class ExportVisualData {
             	while (iter.hasNext()) {
             		count++;
             		SAMRecord SamRead = iter.next();
-            		String cigar = SamRead.getCigarString();
-            		int start  = SamRead.getAlignmentStart();
-            		int end = SamRead.getAlignmentEnd();
-            		String readbases = SamRead.getReadString();
-            		int mappingquality = SamRead.getMappingQuality();
-            		boolean direction = SamRead.getReadNegativeStrandFlag();
+            		//String cigar = SamRead.getCigarString();
+            		//int start  = SamRead.getAlignmentStart();
+            		//int end = SamRead.getAlignmentEnd();
+            		//String readbases = SamRead.getReadString();
+            		//int mappingquality = SamRead.getMappingQuality();
+            		///boolean direction = SamRead.getReadNegativeStrandFlag();
             		//System.out.println(start + " " + end);
-            		visualdataList.add(new VisualData(direction, cigar, start, end, readbases, mappingquality, count, individualID[i]));
+            		visualdataList.add(new VisualData(dnmRecord, indexfasta, SamRead, count, individualID[i]));
             		//if (start < end) {
-            		minstart = Integer.min(minstart, start);
-            		maxend = Integer.max(maxend, end);
+            		minstart = Integer.min(minstart, visualdataList.get(visualdataList.size()-1).getstartContainSoftAndHardClip());
+            		maxend = Integer.max(maxend, visualdataList.get(visualdataList.size()-1).getendContainSoftAndHardClip());
             		//} else {
             		//	minstart = Integer.min(minstart, end);
             		//	maxend = Integer.max(maxend, end);
@@ -119,7 +119,7 @@ public class ExportVisualData {
             //writer.println("#reference," + minstart + "," + maxend + "," + refread);
             //writer.println("#position," + dnmRecord.getChrom() + "," + dnmRecord.getPos());
             VisualData tmp = null;
-            writer.println("allID,groupID,groupName,Direction,startPosition,endPosition,mappingquality,cigar,editcigar,baseread");
+            writer.println("allID,groupID,groupName,Direction,startPosition,endPosition,startPositionContainClip,endPositionContainClip,mappingquality,cigar,editcigar,baseread,mismatch");
             int countall = 0;
             for (int i = 0; i < visualdataList.size(); i++) {
             	tmp = visualdataList.get(i);
@@ -127,7 +127,7 @@ public class ExportVisualData {
             	/*if (tmp.getNumb() == 1) {
             		writer.println("#" + tmp.getIndividualID());
             	}*/
-            	writer.println(countall + "," + tmp.getNumb() + "," + tmp.getIndividualID() +  "," + tmp.getDirection() + "," + tmp.getStart() + "," + tmp.getEnd() + ","+ tmp.getMappingQuality() + "," + tmp.getCigar() + "," + tmp.getEditCigar() + "," + tmp.getRead());
+            	writer.println(countall + "," + tmp.getNumb() + "," + tmp.getIndividualID() +  "," + tmp.getDirection() + "," + tmp.getStart() + "," + tmp.getEnd() + "," + tmp.getstartContainSoftAndHardClip() + "," + tmp.getendContainSoftAndHardClip() + "," + tmp.getMappingQuality() + "," + tmp.getCigar() + "," + tmp.getEditCigar() + "," + tmp.getRead() + "," + tmp.getMismatch());
             }
             refwriter.println("chrom,visualPositon,startPosition,endPosition,refread");
             refwriter.println(dnmRecord.getChrom() + "," + dnmRecord.getPos() + "," + minstart + "," + maxend + "," + refread);
